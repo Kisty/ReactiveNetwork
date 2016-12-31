@@ -2,13 +2,27 @@ language: android
 
 android:
   components:
-    - build-tools-23.0.1
+    - platform-tools
+    - tools
+    - build-tools-23.0.3
     - android-23
+    - extra-android-support
     - extra-android-m2repository
-    - extra-google-m2repository
+  licenses:
+    - android-sdk-license-5be876d5
+    - android-sdk-license-c81a61d9
+
+jdk: oraclejdk8
 
 install:
   - true
 
+after_success:
+  - bash <(curl -s https://codecov.io/bash)
+
 script:
-  - ./gradlew clean build check
+  - ./gradlew clean build test jacocoTestReport check
+
+cache:
+  directories:
+    - $HOME/.m2

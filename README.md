@@ -2,7 +2,8 @@
 
 [![Android Arsenal](https://img.shields.io/badge/Android%20Arsenal-ReactiveNetwork-brightgreen.svg?style=flat)](https://android-arsenal.com/details/1/2290)
 [![Build Status](https://travis-ci.org/pwittchen/ReactiveNetwork.svg?branch=master)](https://travis-ci.org/pwittchen/ReactiveNetwork)
-![Maven Central](https://img.shields.io/maven-central/v/com.github.pwittchen/reactivenetwork.svg?style=flat)
+[![codecov](https://codecov.io/gh/pwittchen/ReactiveNetwork/branch/master/graph/badge.svg)](https://codecov.io/gh/pwittchen/ReactiveNetwork)
+[![Maven Central](https://img.shields.io/maven-central/v/com.github.pwittchen/reactivenetwork.svg?style=flat)](https://maven-badges.herokuapp.com/maven-central/com.github.pwittchen/reactivenetwork)
 
 ReactiveNetwork is an Android library listening **network connection state** and **Internet connectivity** with RxJava Observables. It's a successor of [Network Events](https://github.com/pwittchen/NetworkEvents) library rewritten with Reactive Programming approach.
 
@@ -26,25 +27,21 @@ Contents
   - [Observing network connectivity](#observing-network-connectivity)
     - [Connectivity class](#connectivity-class)
   - [Observing Internet connectivity](#observing-internet-connectivity)
+    - [Customization of observing Internet connectivity](#customization-of-observing-internet-connectivity)
+  - [ProGuard configuration](#proguard-configuration)
 - [Examples](#examples)
 - [Download](#download)
 - [Tests](#tests)
 - [Code style](#code-style)
 - [Static code analysis](#static-code-analysis)
 - [Who is using this library?](#who-is-using-this-library)
+- [Getting help](#getting-help)
+- [Changelog](#changelog)
+- [Releasing](#releasing)
 - [License](#license)
 
 Usage
 -----
-
-Library has the following RxJava Observables available in the public API:
-
-```java
-Observable<Connectivity> observeNetworkConnectivity(final Context context)
-Observable<Connectivity> observeNetworkConnectivity(final Context context, final NetworkObservingStrategy strategy)
-Observable<Boolean> observeInternetConnectivity()
-Observable<Boolean> observeInternetConnectivity(final int interval, final String host, final int port, final int timeout)
-```
 
 **Please note**: Due to memory leak in `WifiManager` reported
 in [issue 43945](https://code.google.com/p/android/issues/detail?id=43945) in Android issue tracker
@@ -70,7 +67,7 @@ ReactiveNetwork.observeNetworkConnectivity(context)
 
 When `Connectivity` changes, subscriber will be notified. `Connectivity` can change its state or type.
 
-We can react on a concrete state, states, type or types changes with the `filter(...)` method from RxJava, `hasState(final NetworkInfo.State... states)` and `hasType(final int... types)` methods located in `Connectivity` class.
+We can react on a concrete state, states, type or types changes with the `filter(...)` method from RxJava, `hasState(NetworkInfo.State... states)` and `hasType(int... types)` methods located in `Connectivity` class.
 
 ```java
 ReactiveNetwork.observeNetworkConnectivity(context)
@@ -91,14 +88,14 @@ ReactiveNetwork.observeNetworkConnectivity(context)
 You can also use method:
 
 ```java
-Observable<Connectivity> observeNetworkConnectivity(final Context context, final NetworkObservingStrategy strategy)
+Observable<Connectivity> observeNetworkConnectivity(Context context, NetworkObservingStrategy strategy)
 ```
 
 This method allows you to apply your own network observing strategy and is used by the library under the hood to determine appropriate strategy depending on the version of Android system.
 
 #### Connectivity class
 
-`Connectivity` class is used by `observeNetworkConnectivity(context)` and `observeNetworkConnectivity(context,networkObservingStrategy)` methods. It has the following API:
+`Connectivity` class is used by `observeNetworkConnectivity(context)` and `observeNetworkConnectivity(context, networkObservingStrategy)` methods. It has the following API:
 
 ```java
 // factory methods responsible for creating Connectivity object
@@ -114,8 +111,8 @@ boolean isDefault()
 String toString()
 
 // helper methods for filter(...) method from RxJava
-Func1<Connectivity, Boolean> hasState(final NetworkInfo.State... states)
-Func1<Connectivity, Boolean> hasType(final int... types)
+Func1<Connectivity, Boolean> hasState(NetworkInfo.State... states)
+Func1<Connectivity, Boolean> hasType(int... types)
 ```
 
 ### Observing Internet connectivity
@@ -135,15 +132,67 @@ ReactiveNetwork.observeInternetConnectivity()
 
 An `Observable` will return `true` to the subscription if device is connected to the Internet and `false` if not.
 
+Internet connectivity will be checked _as soon as possible_.
+
 **Please note**: This method is less efficient than `observeNetworkConnectivity(context)` method, because it opens socket connection with remote host (default is www.google.com) every two seconds with two seconds of timeout and consumes data transfer. Use this method if you really need it. Optionally, you can unsubscribe subcription right after you get notification that Internet is available and do the work you want in order to decrease network calls.
+
+#### Customization of observing Internet connectivity
+
+Methods in this section should be used if they are really needed due to specific use cases.
 
 If you want to specify your own custom details for checking Internet connectivity, you can use the following method:
 
 ```java
-Observable<Boolean> observeInternetConnectivity(final int interval, final String host, final int port, final int timeout)
+Observable<Boolean> observeInternetConnectivity(int interval, String host, int port, int timeout)
 ```
 
 It allows you to specify custom interval of checking connectivity in milliseconds, host, port and connection timeout in milliseconds.
+
+You can also use the following method:
+
+```java
+Observable<Boolean> observeInternetConnectivity(int initialIntervalInMs, int intervalInMs, String host, int port, int timeout)
+```
+
+It does the same thing as method above, but allows to define initial delay of the first Internet connectivity check. Default is equal to zero.
+
+You can use method:
+
+```java
+Observable<Boolean> observeInternetConnectivity(final int initialIntervalInMs, final int intervalInMs, final String host, final int port, final int timeoutInMs, final ErrorHandler errorHandler)
+```
+
+which allows you to define `ErrorHandler` implementation, which handle any errors which can occur during checking connectivity.
+By default library uses `DefaultErrorHandler`.
+
+You can also use method:
+
+```java
+Observable<Boolean> observeInternetConnectivity(final InternetObservingStrategy strategy, final int initialIntervalInMs, final int intervalInMs, final String host, final int port, final int timeoutInMs, final ErrorHandler errorHandler)
+```
+
+which allows you to implement `ErrorHandler` and `InternetObservingStrategy` in case you want to have your own strategy for monitoring connectivity with the Internet.
+
+You can use method:
+
+```java
+Observable<Boolean> observeInternetConnectivity(final InternetObservingStrategy strategy)
+```
+
+which allows you to implement custom `InternetObservingStrategy` in case you want to have your own strategy. Remaining settings will be default.
+
+These methods are created to allow the users to fully customize the library and give them more control.
+
+For more details check JavaDoc at: http://pwittchen.github.io/ReactiveNetwork/
+
+### ProGuard configuration
+
+```
+-dontwarn com.github.pwittchen.reactivenetwork.library.ReactiveNetwork
+-dontwarn io.reactivex.functions.Function
+-dontwarn rx.internal.util.**
+-dontwarn sun.misc.Unsafe
+```
 
 Examples
 --------
@@ -161,7 +210,7 @@ You can depend on the library through Maven:
 <dependency>
     <groupId>com.github.pwittchen</groupId>
     <artifactId>reactivenetwork</artifactId>
-    <version>0.5.2</version>
+    <version>0.7.0</version>
 </dependency>
 ```
 
@@ -169,17 +218,23 @@ or through Gradle:
 
 ```groovy
 dependencies {
-  compile 'com.github.pwittchen:reactivenetwork:0.5.2'
+  compile 'com.github.pwittchen:reactivenetwork:0.7.0'
 }
 ```
 
 Tests
 -----
 
-Tests are available in `library/src/androidTest/java/` directory and can be executed on emulator or Android device from Android Studio or CLI with the following command:
+Tests are available in `library/src/test/java/` directory and can be executed on JVM without any emulator or Android device from Android Studio or CLI with the following command:
 
 ```
-./gradlew connectedCheck
+./gradlew test
+```
+
+To generate test coverage report, run the following command:
+
+```
+./gradlew test jacocoTestReport
 ```
 
 Code style
@@ -201,11 +256,36 @@ Reports from analysis are generated in `library/build/reports/` directory.
 Who is using this library?
 --------------------------
 - [PAT Track - realtime Tracker for the public transit in Pittsburgh, PA](https://play.google.com/store/apps/details?id=rectangledbmi.com.pittsburghrealtimetracker)
-- [eero - Home WiFi System](https://play.google.com/store/apps/details?id=com.eero.android)
+- [Eero - Home WiFi System](https://play.google.com/store/apps/details?id=com.eero.android)
 - [ACN Android Framework](https://github.com/ugurcany/ACN-Android-Framework)
+- [Spatial Connect Android SDK](https://github.com/boundlessgeo/spatialconnect-android-sdk)
+- [Qiscus SDK for Android](https://github.com/qiscus/qiscus-sdk-android)
+- [Internet Radio](https://play.google.com/store/apps/details?id=com.stc.radio.player)
+- [Tachiyomi](https://github.com/inorichi/tachiyomi)
 - and more...
 
 Are you using this library in your app and want to be listed here? Send me a Pull Request or an e-mail to piotr@wittchen.biz.pl
+
+Getting help
+------------
+
+Do you need help related to using or configuring this library? 
+
+You can do the following things:
+- [Ask the question on StackOverflow](http://stackoverflow.com/questions/ask?tags=reactivenetwork)
+- [Create new GitHub issue](https://github.com/pwittchen/ReactiveNetwork/issues/new)
+
+Don't worry. Someone should help you with solving your problems.
+
+Changelog
+---------
+
+See [CHANGELOG.md](https://github.com/pwittchen/ReactiveNetwork/blob/master/CHANGELOG.md) file.
+
+Releasing
+---------
+
+See [RELEASING.md](https://github.com/pwittchen/ReactiveNetwork/blob/master/RELEASING.md) file.
 
 License
 -------

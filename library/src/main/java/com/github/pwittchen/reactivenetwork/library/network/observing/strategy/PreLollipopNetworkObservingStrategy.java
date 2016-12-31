@@ -21,6 +21,7 @@ import android.content.Intent;
 import android.content.IntentFilter;
 import android.net.ConnectivityManager;
 import android.os.Looper;
+import android.util.Log;
 import com.github.pwittchen.reactivenetwork.library.Connectivity;
 import com.github.pwittchen.reactivenetwork.library.network.observing.NetworkObservingStrategy;
 import rx.Observable;
@@ -31,10 +32,14 @@ import rx.android.schedulers.AndroidSchedulers;
 import rx.functions.Action0;
 import rx.subscriptions.Subscriptions;
 
+import static com.github.pwittchen.reactivenetwork.library.ReactiveNetwork.LOG_TAG;
+
 /**
- * Network observing strategy for Android devices before Lollipop (API 20 or lower)
+ * Network observing strategy for Android devices before Lollipop (API 20 or lower).
+ * Uses Broadcast Receiver.
  */
 public class PreLollipopNetworkObservingStrategy implements NetworkObservingStrategy {
+
   @Override public Observable<Connectivity> observeNetworkConnectivity(final Context context) {
     final IntentFilter filter = new IntentFilter();
     filter.addAction(ConnectivityManager.CONNECTIVITY_ACTION);
@@ -51,16 +56,27 @@ public class PreLollipopNetworkObservingStrategy implements NetworkObservingStra
 
         subscriber.add(unsubscribeInUiThread(new Action0() {
           @Override public void call() {
-            context.unregisterReceiver(receiver);
+            tryToUnregisterReceiver(context, receiver);
           }
         }));
       }
     }).defaultIfEmpty(Connectivity.create());
   }
 
+  private void tryToUnregisterReceiver(final Context context, final BroadcastReceiver receiver) {
+    try {
+      context.unregisterReceiver(receiver);
+    } catch (Exception exception) {
+      onError("receiver was already unregistered", exception);
+    }
+  }
+
+  @Override public void onError(final String message, final Exception exception) {
+    Log.e(LOG_TAG, message, exception);
+  }
+
   private Subscription unsubscribeInUiThread(final Action0 unsubscribe) {
     return Subscriptions.create(new Action0() {
-
       @Override public void call() {
         if (Looper.getMainLooper() == Looper.myLooper()) {
           unsubscribe.call();
